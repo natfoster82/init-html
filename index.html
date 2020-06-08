@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+<title>peer to peer html, served from local storage</title>
+</head>
+<style media="screen">
+#modal-content-wrapper {
+  height: 100%;
+}
+#sidebar {
+  overflow-y: scroll;
+}
+#key-editor {
+  height: 100%;
+}
+#key-editor textarea {
+  width: 100%;
+  height: 100%;
+  resize: vertical;
+  overflow: auto;
+}
+#key-editor pre {
+  height: 100%;
+  padding-bottom: 20px;
+}
+.modal-dialog.modal-full {
+  max-width: 100%;
+  margin: 0;
+  padding: 20px 20px 20px 20px;
+  height: 100vh;
+  display: flex;
+}
+#sidebar-wrapper{
+ overflow-y: auto;
+}
+</style>
+<body>
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-12 p-0">
+      <div class="btn-group" role="group" aria-label="Basic example">
+        <a id="me" target="_blank" class="btn btn-sm btn-link"></a>
+        <button type="button" class="btn btn-sm btn-link" data-toggle="modal" onclick="openEditModal()">
+          my data
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div id="app" class="col-md-12 p-0"></div>
+  </div>
+</div>
+<div class="modal fade" id="edit-data-modal" tabindex="-1" role="dialog" aria-labelledby="edit-data-modal=label" aria-hidden="true">
+  <div class="modal-dialog modal-full">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="edit-data-modal=label">my data</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-content-wrapper" class="row">
+          <div id="sidebar" class= "col-2">
+            <div id="key-buttons" class="btn-group-vertical" role="group"></div>
+            <form onsubmit="event.preventDefault();addKey()">
+              <div class="form-group">
+                <div class="input-group mb-3">
+                  <input type="text" class="form-control" id="new-key-input" placeholder="new-key" required pattern="^[a-zA-Z0-9_-]*$">
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-primary" type="submit">+</button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+          <div class="col-10">
+            <div id="key-editor" class="form-group">
+              <h5><label for="edit-key-textarea" id="edit-key-label"></label></h5>
+              <pre><textarea class="form-control" id="edit-key-textarea" onchange="cache(this)"></textarea></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-link" onclick="startBlog()">start blog</button>
+        <button id="delete-btn" type="button" class="btn btn-secondary" onclick="deleteKey()">delete this key</button>
+        <button type="button" class="btn btn-primary" onclick="saveAll()">save</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.10.2/underscore-min.js" integrity="sha256-av1TvywtZ4ZqyCj/6HdtCHSJdn80HAzTgEBTJt/O8uc=" crossorigin="anonymous"></script>
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"></script>
+<script type="text/javascript">
+const meEl = document.getElementById('me')
+const showEl = document.getElementById('showEl')
+const appEl = document.getElementById('app')
+const url = new URL(window.location)
+const me = url.searchParams.get('me')
+const peer = new Peer(me, {host: 'localhost', path: '/myapp', port: 9000})
+peer.on('open', (id) => {
+  init()
+})
+
+const STORE = {
+  get: (key, parse, useCache) => {
+    let value = useCache ? STORE.cache[key] || localStorage.getItem(key) : localStorage.getItem(key)
+    if (parse) value = JSON.parse(value)
+    return value
+  },
+  set: (key, value, stringify) => {
+    if (stringify) value = JSON.stringify(value)
+    localStorage.setItem(key, value)
+  },
+  del: (key) => {
+    localStorage.removeItem(key)
+  },
+  apush: (key, value) => {
+    const a = STORE.get(key, true, true)
+    a.push(value)
+    STORE.set(JSON.stringify(a))
+  },
+  adel: (key, index) => {
+    const a = STORE.get(key, true, true)
+    a.splice(index, 1);
+    STORE.set(JSON.stringify(a))
+  },
+  hset: (key, index, value) => {
+    const o = STORE.get(key, true, true)
+    o[index] = value
+    STORE.set(JSON.stringify(a))
+  },
+  hdel: (key, index, value) => {
+    const o = STORE.get(key, true, true)
+    delete o[index]
+    STORE.set(JSON.stringify(a))
+  },
+  alphabetized: () => {
+    const a = Object.keys(localStorage)
+    a.sort()
+    return a
+  },
+  saveAll: () => {
+    for (let key of STORE.keysToDelete) {
+      localStorage.removeItem(key)
+      delete STORE.cache[key]
+    }
+    STORE.keysToDelete = []
+    for (let key in STORE.cache) {
+      if (STORE.cache.hasOwnProperty(key)) {
+        localStorage.setItem(key, STORE.cache[key])
+      }
+    }
+  },
+  cache: {},
+  keysToDelete: []
+}
+const SERVER_SWITCHBOARD = {
+  get: (data, conn) => {
+    let html
+    let key = data.key
+    const js = STORE.get(`_${key}`)
+    if (js) {
+      html = new Function(js)()
+    } else {
+      html = localStorage.getItem(key)
+    }
+    conn.send({case: 'html', data: {html: html, id: data.id}})
+  }
+}
+const CLIENT_SWITCHBOARD = {
+  html: (data, conn) => {
+    let el = appEl
+    if (data.id) el = document.getElementById(data.id)
+    el.innerHTML = data.html
+    const more = el.querySelectorAll('[data-get]');
+    for (const moreEl of more.values()) {
+      conn.send({'case': 'get', data: {key: moreEl.dataset.get, id: moreEl.id}})
+    }
+  }
+}
+
+const BLOG_TEMPLATE = {
+_index: `return \`
+<style>
+  h3 {
+    color:blue;
+  }
+</style>
+<div class="container">
+  <div class="row">
+    <div class="col-md-12">
+      <h3>\${STORE.get('title')}</h3>
+      <div id="subtitle" data-get="subtitle"></div>
+    </div>
+  </div>
+</div>
+\`
+`,
+title: 'Hello world!',
+subtitle: 'from nat',
+}
+
+let currentKey
+
+function init () {
+  peer.on('connection', (conn) => {
+    conn.on('data', (data) => {
+      SERVER_SWITCHBOARD[data.case](data.data, conn)
+    })
+  })
+
+  meEl.innerHTML = peer.id
+  meEl.href = `${window.location.origin}?show=${peer.id}`
+
+  const show = url.searchParams.get('show') || peer.id
+  const conn = peer.connect(show)
+  conn.on('data', (data) => {
+    CLIENT_SWITCHBOARD[data.case](data.data, conn)
+  })
+  conn.on('open', () => {
+    setTimeout(() => {
+      conn.send({'case': 'get', data: {key: 'index'}})
+    }, 50)
+  })
+}
+function openEditModal () {
+  const $keyButtons = $('#key-buttons')
+  $keyButtons.html('')
+  for (const key of STORE.alphabetized()) {
+    makeButton(key)
+  }
+  $('#key-editor').hide()
+  $('#edit-data-modal').modal('show')
+  $('#delete-btn').hide()
+}
+function makeButton (key) {
+  const $button = $(`<button type="button" id="btn-for-${key}" class="btn btn-link" data-key="${key}" onclick="editKey(this)">${key}</button>`)
+  const $keyButtons = $('#key-buttons')
+  $keyButtons.append($button)
+  return $button
+}
+function editKey (btn) {
+  const $button = $(btn)
+  const key = $button.data('key')
+  currentKey = key
+  $('#edit-key-textarea').val(STORE.get(key, false, true))
+  $('#edit-key-label').text(key)
+  $('#key-editor').show()
+  $('#delete-btn').show()
+}
+function addKey () {
+  const $newKeyInput = $('#new-key-input')
+  const key = $newKeyInput.val()
+  $button = makeButton(key)
+  $newKeyInput.val('')
+  editKey($button[0])
+}
+function deleteKey (key) {
+  key = key || currentKey
+  STORE.keysToDelete.push(key)
+  $('#edit-key-textarea').val('')
+  $(`#btn-for-${key}`).remove()
+  $('#key-editor').hide()
+  $('#delete-btn').hide()
+  currentKey = null
+}
+function saveAll () {
+  STORE.saveAll()
+  // $('#edit-data-modal').modal('hide')
+}
+function cache () {
+  STORE.cache[currentKey] = $('#edit-key-textarea').val()
+}
+function startBlog() {
+  for (const [key, value] of Object.entries(BLOG_TEMPLATE)) {
+    if (!STORE.get(key)) {
+      makeButton(key)
+      STORE.cache[key] = value
+    }
+  }
+}
+</script>
+</body>
+</html>
