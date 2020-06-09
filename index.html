@@ -99,15 +99,70 @@
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"></script>
 <script type="text/javascript">
-const meEl = document.getElementById('me')
-const showEl = document.getElementById('showEl')
-const appEl = document.getElementById('app')
-const url = new URL(window.location)
-const me = url.searchParams.get('me')
-const peer = new Peer(me, {host: 'localhost', path: '/myapp', port: 9000})
+
+//TODO: move these inside
+// const meEl = document.getElementById('me')
+// const showEl = document.getElementById('showEl')
+// const appEl = document.getElementById('app')
+
+const peer = new Peer({
+  host: localStorage.getItem('PEER_SERVER_HOST'),
+  path: localStorage.getItem('PEER_SERVER_PATH'),
+  port: localStorage.getItem('PEER_SERVER_PORT')
+})
+
 peer.on('open', (id) => {
   init()
 })
+
+const DEFAULT_APPS = {
+  _get: `// takes payload.meta.key and sends a value
+const [payload, conn] = arguments
+const key = payload.meta.key
+const appKey = '_' + key
+let value
+if (SELF.apps.hasOwnProperty(appKey)) {
+  value = SELF.apps[appKey](payload, conn)
+} else {
+  value = localStorage.getItem(key)
+}
+console.log('sending', {data: value, meta: payload.meta})
+conn.send({data: value, meta: payload.meta})
+`,
+  _set: '// yeah right',
+  _html: `// takes payload.data and loads it into the innerHTML at meta.id
+const [payload, conn] = arguments
+let el = document.getElementById(payload.meta.id)
+el.innerHTML = payload.data
+const more = el.querySelectorAll('[data-get]');
+for (const moreEl of more.values()) {
+  conn.send({app: '_get', meta: {key: moreEl.dataset.get, id: moreEl.id, apps: ['_html']}})
+}
+`
+}
+
+const APP_TEMPLATES = {
+_helloWorld: `// returns html for _html
+const [payload, conn] = arguments
+return \`
+  <style>
+    h3 {
+      color:blue;
+    }
+  </style>
+  <div class="container">
+    <div class="row">
+      <div class="col-md-12">
+        <!-- you'll need to put title in -->
+        <h3>\${localStorage.getItem('title') || 'Hello world!'}</h3>
+        <!-- you can also use data-get attributes to load more data -->
+        <div id="subtitle" data-get="subtitle"></div>
+      </div>
+    </div>
+  </div>
+\`
+`
+}
 
 const STORE = {
   get: (key, parse, useCache) => {
@@ -162,74 +217,62 @@ const STORE = {
   cache: {},
   keysToDelete: []
 }
-const SERVER_SWITCHBOARD = {
-  get: (data, conn) => {
-    let html
-    let key = data.key
-    const js = STORE.get(`_${key}`)
-    if (js) {
-      html = new Function(js)()
-    } else {
-      html = localStorage.getItem(key)
-    }
-    conn.send({case: 'html', data: {html: html, id: data.id}})
-  }
-}
-const CLIENT_SWITCHBOARD = {
-  html: (data, conn) => {
-    let el = appEl
-    if (data.id) el = document.getElementById(data.id)
-    el.innerHTML = data.html
-    const more = el.querySelectorAll('[data-get]');
-    for (const moreEl of more.values()) {
-      conn.send({'case': 'get', data: {key: moreEl.dataset.get, id: moreEl.id}})
-    }
-  }
-}
 
-const BLOG_TEMPLATE = {
-_index: `return \`
-<style>
-  h3 {
-    color:blue;
+const SELF = {
+  accept: (payload, conn) => {
+    console.log('accept', payload, conn)
+    // my apps look for payload.app and payload.meta.apps
+    if (payload.app) {
+      SELF.apps[payload.app](payload, conn)
+    } else {
+      for (let app of payload.meta.apps) {
+        try {
+          SELF.apps[app](payload, conn)
+        } catch (e) {
+          console.log(app, payload, conn)
+        }
+      }
+    }
+  },
+  apps: {},
+  loadApp: (key) => {
+    const code = localStorage.getItem(key)
+    SELF.apps[key] = new Function(code)
   }
-</style>
-<div class="container">
-  <div class="row">
-    <div class="col-md-12">
-      <h3>\${STORE.get('title')}</h3>
-      <div id="subtitle" data-get="subtitle"></div>
-    </div>
-  </div>
-</div>
-\`
-`,
-title: 'Hello world!',
-subtitle: 'from nat',
 }
 
 let currentKey
 
 function init () {
+  for (let [key, code] of Object.entries(DEFAULT_APPS)) localStorage.setItem(key, code)
+  for (let key of Object.keys(localStorage)) {
+    if (key.startsWith('_')) SELF.loadApp(key)
+  }
+
   peer.on('connection', (conn) => {
-    conn.on('data', (data) => {
-      SERVER_SWITCHBOARD[data.case](data.data, conn)
+    conn.on('data', (payload) => {
+      SELF.accept(payload, conn)
     })
   })
 
+  // TODO: remove when you can open one app at a time in separate windows
+  const meEl = document.getElementById('me')
   meEl.innerHTML = peer.id
   meEl.href = `${window.location.origin}?show=${peer.id}`
 
-  const show = url.searchParams.get('show') || peer.id
-  const conn = peer.connect(show)
-  conn.on('data', (data) => {
-    CLIENT_SWITCHBOARD[data.case](data.data, conn)
-  })
-  conn.on('open', () => {
-    setTimeout(() => {
-      conn.send({'case': 'get', data: {key: 'index'}})
-    }, 50)
-  })
+  const url = new URL(window.location)
+  const show = url.searchParams.get('show')
+  if (show) {
+    const conn = peer.connect(show)
+    conn.on('data', (payload) => {
+      SELF.accept(payload, conn)
+    })
+    conn.on('open', () => {
+      setTimeout(() => {
+        conn.send({app: '_get', meta: {key: 'index', id: 'app', apps: ['_html']}})
+      }, 50)
+    })
+  }
 }
 function openEditModal () {
   const $keyButtons = $('#key-buttons')
@@ -274,18 +317,16 @@ function deleteKey (key) {
 }
 function saveAll () {
   STORE.saveAll()
+  for (let key of Object.keys(localStorage)) SELF.loadApp(key)
   // $('#edit-data-modal').modal('hide')
 }
 function cache () {
   STORE.cache[currentKey] = $('#edit-key-textarea').val()
 }
 function startBlog() {
-  for (const [key, value] of Object.entries(BLOG_TEMPLATE)) {
-    if (!STORE.get(key)) {
-      makeButton(key)
-      STORE.cache[key] = value
-    }
-  }
+  if ('_helloWorld' in localStorage) return
+  localStorage.setItem('_helloWorld', APP_TEMPLATES._helloWorld)
+  makeButton('_helloWorld')
 }
 </script>
 </body>
