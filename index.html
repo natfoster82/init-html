@@ -1,142 +1,172 @@
 <!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
-<title>peer to peer html, served from local storage</title>
+<title>Aralia Fabian</title>
 </head>
-<style media="screen">
-#modal-content-wrapper {
-  height: 100%;
-}
-#sidebar {
-  overflow-y: scroll;
-}
-#key-editor {
-  height: 100%;
-}
-#key-editor textarea {
-  width: 100%;
-  height: 100%;
-  resize: vertical;
-  overflow: auto;
-}
-#key-editor pre {
-  height: 100%;
-  padding-bottom: 20px;
-}
-.modal-dialog.modal-full {
-  max-width: 100%;
-  margin: 0;
-  padding: 20px 20px 20px 20px;
-  height: 100vh;
-  display: flex;
-}
-#sidebar-wrapper{
- overflow-y: auto;
-}
-</style>
-<body>
-<div class="container-fluid">
-  <div class="row">
-    <div class="col-md-12 p-0">
-      <div class="btn-group" role="group" aria-label="Basic example">
-        <a id="me" target="_blank" class="btn btn-sm btn-link"></a>
-        <button type="button" class="btn btn-sm btn-link" data-toggle="modal" onclick="openEditModal()">
-          my data
-        </button>
-      </div>
-    </div>
-  </div>
-  <div class="row">
-    <div id="app" class="col-md-12 p-0"></div>
-  </div>
+<style></style>
+<div id="buttons">
+  <button onclick="SELF.click(event)" data-show="home">Home</div>
 </div>
-<div class="modal fade" id="edit-data-modal" tabindex="-1" role="dialog" aria-labelledby="edit-data-modal=label" aria-hidden="true">
-  <div class="modal-dialog modal-full">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="edit-data-modal=label">my data</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div id="modal-content-wrapper" class="row">
-          <div id="sidebar" class= "col-2">
-            <div id="key-buttons" class="btn-group-vertical" role="group"></div>
-            <form onsubmit="event.preventDefault();addKey()">
-              <div class="form-group">
-                <div class="input-group mb-3">
-                  <input type="text" class="form-control" id="new-key-input" placeholder="new-key" required pattern="^[a-zA-Z0-9_-]*$">
-                  <div class="input-group-append">
-                    <button class="btn btn-outline-primary" type="submit">+</button>
-                  </div>
-                </div>
-              </div>
-            </form>
-          </div>
-          <div class="col-10">
-            <div id="key-editor" class="form-group">
-              <h5><label for="edit-key-textarea" id="edit-key-label"></label></h5>
-              <pre><textarea class="form-control" id="edit-key-textarea" onchange="cache(this)"></textarea></pre>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-link" onclick="startBlog()">start blog</button>
-        <button id="delete-btn" type="button" class="btn btn-secondary" onclick="deleteKey()">delete this key</button>
-        <button type="button" class="btn btn-primary" onclick="saveAll()">save</button>
-      </div>
-    </div>
-  </div>
+<div id="divs">
+  <div id="home" style="width:100%;height:100%"></div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/underscore.js/1.10.2/underscore-min.js" integrity="sha256-av1TvywtZ4ZqyCj/6HdtCHSJdn80HAzTgEBTJt/O8uc=" crossorigin="anonymous"></script>
-<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
+</main>
+<footer>
+</footer>
 <script src="https://unpkg.com/peerjs@1.2.0/dist/peerjs.min.js"></script>
 <script type="text/javascript">
+const SELF = {
+  memory: {
+    peer: null,
+    apps: {},
+    names: {},
+    tmp: {}
+  },
+  init: () => {
+    for (let [key, code] of Object.entries(DEFAULT_APPS)) localStorage.setItem(key, code)
+    SELF.loadApps()
+    // i put my own home in the dom, kinda like a desktop, always there
+    document.getElementById('home').innerHTML = SELF.get('home')
+    const PEER_SERVER_HOST =  window.prompt('PEER_SERVER_HOST', localStorage.getItem('PEER_SERVER_HOST') || 'peerjspoc.caveon.com')
+    localStorage.setItem('PEER_SERVER_HOST', PEER_SERVER_HOST)
 
-//TODO: move these inside
-// const meEl = document.getElementById('me')
-// const showEl = document.getElementById('showEl')
-// const appEl = document.getElementById('app')
+    const MY_ID = window.prompt('MY_ID (leave blank for random)', localStorage.getItem('MY_ID') || '')
+    localStorage.setItem('MY_ID', MY_ID)
 
-const peer = new Peer({
-  host: localStorage.getItem('PEER_SERVER_HOST'),
-  path: localStorage.getItem('PEER_SERVER_PATH'),
-  port: localStorage.getItem('PEER_SERVER_PORT')
-})
+    SELF.memory.peer = new Peer(MY_ID, {
+      host: localStorage.getItem('PEER_SERVER_HOST'),
+      path: localStorage.getItem('PEER_SERVER_PATH') || '/myapp',
+      port: localStorage.getItem('PEER_SERVER_PORT') || ''
+    })
+    SELF.memory.peer.on('open', (id) => {
+      SELF.memory.peer.on('connection', (conn) => {
+        SELF.configure(conn)
+      })
+    })
+  },
+  get: (key, payload, conn) => {
+    const appKey = '_' + key
+    if (SELF.memory.apps.hasOwnProperty(appKey)) {
+      return SELF.memory.apps[appKey](payload, conn)
+    }
+    return localStorage.getItem(key)
+  },
+  loadApps: (key) => {
+    SELF.memory.apps = {}
+    for (let key of Object.keys(localStorage)) {
+      if (!key.startsWith('_')) continue
+      const code = localStorage.getItem(key)
+      SELF.memory.apps[key] = new Function(code)
+    }
+  },
+  accept: (payload, conn) => {
+    console.log('accept', payload, conn)
+    // i route based on payload.app and payload._meta.apps
+    // please send my meta back intact at _meta whenever you can
+    if (payload.app) {
+      SELF.memory.apps[payload.app](payload, conn)
+    } else {
+      for (let app of payload._meta.apps) {
+        try {
+          SELF.memory.apps[app](payload, conn)
+        } catch (e) {
+          console.error('app error', app, e, payload, conn)
+        }
+      }
+    }
+  },
+  connect: (id) => {
+    const conn = SELF.memory.peer.connect(id)
+    SELF.configure(conn)
+    return conn
+  },
+  configure: (conn, id) => {
+    setTimeout(() => {
+      // what is your name?
+      conn.send({app: '_get', meta: {key: 'name', apps: ['_name']}})
+    }, 50)
+    conn.on('data', (payload) => {
+      SELF.accept(payload, conn)
+    })
+  },
+  click: (e) => {
+    // all i do is show stuff for now
+    if (e.target.dataset.show) {
+      const divs = document.getElementById('divs').querySelectorAll('div')
+      let showDiv
+      for (const div of divs) {
+        if (div.id === e.target.dataset.show) showDiv = div
+        div.style.display = 'none'
+      }
+      showDiv.style.display = 'block'
+    }
+  },
+  viewHtml: (key, conn) => {
+    console.log(conn)
+    const id = SELF.makeButton(`${SELF.memory.names[conn.peer] || conn.peer} - ${key}`)
+    SELF.send({app: '_get', meta: {key: 'home', id: id, apps: ['_html']}}, conn)
+  },
+  send: (payload, conn) => {
+    if (conn) return conn.send(payload)
+    return SELF.accept(payload, conn)
+  },
+  makeButton: (text) => {
+    const id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5)
+    const button = document.createElement('button')
+    button.dataset.show = id
+    button.innerHTML = text
+    document.getElementById('buttons').appendChild(button)
+    const div = document.createElement('div')
+    div.id = id
+    document.getElementById('divs').appendChild(div)
+    return id
+  }
+}
 
-peer.on('open', (id) => {
-  init()
-})
 
+// set the default package
 const DEFAULT_APPS = {
+  _home: `// home
+const [payload, conn] = arguments
+return \`
+<p>Welcome to my home!</p>
+<p>Or is it yours?</p>
+<p>Either way, pardon the construction.</p>
+<input type="text" placeholder="nat">
+<button onclick="const conn = SELF.connect(event.target.previousSibling.value);SELF.viewHtml('home', conn)">Connect</button>
+\`
+`,
+  _vera: `// a page for vera
+return \`Dear Vera,
+
+This message is coming straight from my open browser tab, no web servers between us.
+
+This is the closest we've ever been.
+
+I'll leave beautiful things here for you.
+
+Nat\`
+`,
   _get: `// takes payload.meta.key and sends a value
 const [payload, conn] = arguments
 const key = payload.meta.key
-const appKey = '_' + key
-let value
-if (SELF.apps.hasOwnProperty(appKey)) {
-  value = SELF.apps[appKey](payload, conn)
-} else {
-  value = localStorage.getItem(key)
-}
-console.log('sending', {data: value, meta: payload.meta})
-conn.send({data: value, meta: payload.meta})
+const value = SELF.get(key)
+// because i'm nice i'll send your meta back at _meta
+SELF.send({data: value, _meta: payload.meta}, conn)
+`,
+  _name: `// takes payload.data and sets it as your name in my memory
+const [payload, conn] = argument
+SELF.memory.names[conn.peer] = payload.data
 `,
   _set: '// yeah right',
-  _html: `// takes payload.data and loads it into the innerHTML at meta.id
+  _html: `// takes payload.data and loads it into the innerHTML at payload._meta.id
 const [payload, conn] = arguments
-let el = document.getElementById(payload.meta.id)
+let el = document.getElementById(payload._meta.id)
 el.innerHTML = payload.data
 const more = el.querySelectorAll('[data-get]');
 for (const moreEl of more.values()) {
-  conn.send({app: '_get', meta: {key: moreEl.dataset.get, id: moreEl.id, apps: ['_html']}})
+  SELF.send({app: '_get', meta: {key: moreEl.dataset.get, id: moreEl.id, apps: ['_html']}}, conn)
 }
 `
 }
@@ -163,171 +193,7 @@ return \`
 \`
 `
 }
-
-const STORE = {
-  get: (key, parse, useCache) => {
-    let value = useCache ? STORE.cache[key] || localStorage.getItem(key) : localStorage.getItem(key)
-    if (parse) value = JSON.parse(value)
-    return value
-  },
-  set: (key, value, stringify) => {
-    if (stringify) value = JSON.stringify(value)
-    localStorage.setItem(key, value)
-  },
-  del: (key) => {
-    localStorage.removeItem(key)
-  },
-  apush: (key, value) => {
-    const a = STORE.get(key, true, true)
-    a.push(value)
-    STORE.set(JSON.stringify(a))
-  },
-  adel: (key, index) => {
-    const a = STORE.get(key, true, true)
-    a.splice(index, 1);
-    STORE.set(JSON.stringify(a))
-  },
-  hset: (key, index, value) => {
-    const o = STORE.get(key, true, true)
-    o[index] = value
-    STORE.set(JSON.stringify(a))
-  },
-  hdel: (key, index, value) => {
-    const o = STORE.get(key, true, true)
-    delete o[index]
-    STORE.set(JSON.stringify(a))
-  },
-  alphabetized: () => {
-    const a = Object.keys(localStorage)
-    a.sort()
-    return a
-  },
-  saveAll: () => {
-    for (let key of STORE.keysToDelete) {
-      localStorage.removeItem(key)
-      delete STORE.cache[key]
-    }
-    STORE.keysToDelete = []
-    for (let key in STORE.cache) {
-      if (STORE.cache.hasOwnProperty(key)) {
-        localStorage.setItem(key, STORE.cache[key])
-      }
-    }
-  },
-  cache: {},
-  keysToDelete: []
-}
-
-const SELF = {
-  accept: (payload, conn) => {
-    console.log('accept', payload, conn)
-    // my apps look for payload.app and payload.meta.apps
-    if (payload.app) {
-      SELF.apps[payload.app](payload, conn)
-    } else {
-      for (let app of payload.meta.apps) {
-        try {
-          SELF.apps[app](payload, conn)
-        } catch (e) {
-          console.log(app, payload, conn)
-        }
-      }
-    }
-  },
-  apps: {},
-  loadApp: (key) => {
-    const code = localStorage.getItem(key)
-    SELF.apps[key] = new Function(code)
-  }
-}
-
-let currentKey
-
-function init () {
-  for (let [key, code] of Object.entries(DEFAULT_APPS)) localStorage.setItem(key, code)
-  for (let key of Object.keys(localStorage)) {
-    if (key.startsWith('_')) SELF.loadApp(key)
-  }
-
-  peer.on('connection', (conn) => {
-    conn.on('data', (payload) => {
-      SELF.accept(payload, conn)
-    })
-  })
-
-  // TODO: remove when you can open one app at a time in separate windows
-  const meEl = document.getElementById('me')
-  meEl.innerHTML = peer.id
-  meEl.href = `${window.location.origin}?show=${peer.id}`
-
-  const url = new URL(window.location)
-  const show = url.searchParams.get('show')
-  if (show) {
-    const conn = peer.connect(show)
-    conn.on('data', (payload) => {
-      SELF.accept(payload, conn)
-    })
-    conn.on('open', () => {
-      setTimeout(() => {
-        conn.send({app: '_get', meta: {key: 'index', id: 'app', apps: ['_html']}})
-      }, 50)
-    })
-  }
-}
-function openEditModal () {
-  const $keyButtons = $('#key-buttons')
-  $keyButtons.html('')
-  for (const key of STORE.alphabetized()) {
-    makeButton(key)
-  }
-  $('#key-editor').hide()
-  $('#edit-data-modal').modal('show')
-  $('#delete-btn').hide()
-}
-function makeButton (key) {
-  const $button = $(`<button type="button" id="btn-for-${key}" class="btn btn-link" data-key="${key}" onclick="editKey(this)">${key}</button>`)
-  const $keyButtons = $('#key-buttons')
-  $keyButtons.append($button)
-  return $button
-}
-function editKey (btn) {
-  const $button = $(btn)
-  const key = $button.data('key')
-  currentKey = key
-  $('#edit-key-textarea').val(STORE.get(key, false, true))
-  $('#edit-key-label').text(key)
-  $('#key-editor').show()
-  $('#delete-btn').show()
-}
-function addKey () {
-  const $newKeyInput = $('#new-key-input')
-  const key = $newKeyInput.val()
-  $button = makeButton(key)
-  $newKeyInput.val('')
-  editKey($button[0])
-}
-function deleteKey (key) {
-  key = key || currentKey
-  STORE.keysToDelete.push(key)
-  $('#edit-key-textarea').val('')
-  $(`#btn-for-${key}`).remove()
-  $('#key-editor').hide()
-  $('#delete-btn').hide()
-  currentKey = null
-}
-function saveAll () {
-  STORE.saveAll()
-  for (let key of Object.keys(localStorage)) SELF.loadApp(key)
-  // $('#edit-data-modal').modal('hide')
-}
-function cache () {
-  STORE.cache[currentKey] = $('#edit-key-textarea').val()
-}
-function startBlog() {
-  if ('_helloWorld' in localStorage) return
-  localStorage.setItem('_helloWorld', APP_TEMPLATES._helloWorld)
-  makeButton('_helloWorld')
-}
+SELF.init()
 </script>
 </body>
 </html>
