@@ -1,0 +1,88 @@
+<!doctype html>
+<head>
+<title>__init__</title>
+</head>
+<body>
+<div id="app">
+<h1>__init__</h1>
+<p>This html file executes whatever code you store at the localStorage key __init__.</p>
+<p>At first this is what I put there:</p>
+<pre>
+<code>
+const APPS = {}
+
+function isApp(key) {
+  return (key.startsWith('_') && key != '__init__')
+}
+
+function loadApp(key) {
+  const code = localStorage.getItem(key)
+  APPS[key] = new Function(code)
+}
+
+function loadApps() {
+  for (let key of Object.keys(localStorage)) {
+     if (isApp(key)) loadApp(key)
+  }
+}
+
+function getFromStorage(key, args) {
+  if (key.startsWith('_')) return ''
+  const appKey = '_' + key
+  if (APPS.hasOwnProperty(appKey)) {
+    return APPS[appKey](...args)
+  }
+  return localStorage.getItem(key) || '404'
+}
+
+function launch() {
+  const keyInput = document.getElementById('key')
+  const command = keyInput.value.split(/\s+/)
+  const key = command[0]
+  let value
+  if (key.startsWith('_')) {
+    value = '404'
+  } else {
+    const args = command.slice(1)
+    value = getFromStorage(key, args)
+  }
+  const tab = window.open('about:blank', '_blank')
+  tab.document.write(value)
+  tab.document.close()
+  keyInput.value = ''
+}
+
+loadApps()
+window.addEventListener('storage', (e) => {
+  console.log(e)
+  if (isApp(e.key)) loadApp(e.key)
+}, false)
+
+const app = document.getElementById('app')
+app.innerHTML = ''
+
+const launcher = document.createElement('div')
+app.appendChild(launcher)
+
+const keyInput = document.createElement('input')
+keyInput.id = 'key'
+keyInput.type = 'text'
+keyInput.placeholder = 'key'
+launcher.appendChild(keyInput)
+
+const launchButton = document.createElement('button')
+launchButton.textContent = 'launch'
+launchButton.onclick = launch
+launcher.appendChild(launchButton)
+
+const instructions = document.createElement('p')
+instructions.textContent = 'Enter a localStorage key here to open it in a new tab. Leave off the leading underscore. Find example apps at github.'
+launcher.appendChild(instructions)
+</code>
+</pre>
+</div>
+<script>
+localStorage.setItem('__init__', document.getElementsByTagName('code')[0].textContent)
+eval(localStorage.getItem('__init__'))
+</script>
+</body>
